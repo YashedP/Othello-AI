@@ -130,13 +130,24 @@ async def start_game(screen, player_color="black"):
         # --- Draw Board & UI ---
         draw_board(screen, board, valid_moves, current_player, time_remaining)
 
-        # --- Draw buttons ---
-        pygame.draw.rect(screen, (225, 225, 225), back_rect, border_radius=5)
+        # Get mouse position
+        mx, my = pygame.mouse.get_pos()
+
+        # --- Draw Buttons ---
+        # --- Draw Back button ---
+        back_color = (225, 225, 225)
+        back_hover_color = (200, 200, 200)
+        color = back_hover_color if back_rect.collidepoint(mx, my) else back_color
+        pygame.draw.rect(screen, color, back_rect, border_radius=5)
         back_text = font.render("Back", True, (0, 0, 0))
         back_text_rect = back_text.get_rect(center=back_rect.center)
         screen.blit(back_text, back_text_rect)
 
-        pygame.draw.rect(screen, (0, 100, 0), undo_rect, border_radius=5)
+        # --- Draw Undo button ---
+        undo_color = (0, 100, 0)
+        undo_hover_color = (0, 140, 0)
+        color = undo_hover_color if undo_rect.collidepoint(mx, my) else undo_color
+        pygame.draw.rect(screen, color, undo_rect, border_radius=5)
         undo_text = font.render("Undo", True, (255, 255, 255))
         undo_text_rect = undo_text.get_rect(center=undo_rect.center)
         screen.blit(undo_text, undo_text_rect)

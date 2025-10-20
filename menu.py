@@ -10,7 +10,8 @@ def show_menu(screen):
 
     # Button setup
     button_width, button_height = 300, 60
-    button_color = (180, 180, 180)  # light grey
+    button_color = (180, 180, 180)  # Default grey
+    hover_color = (220, 220, 220)  # Lighter grey on hover
     text_color = (0, 0, 0)
 
     # Buttons' text
@@ -44,10 +45,14 @@ def show_menu(screen):
         # Draw title
         screen.blit(title_text, title_rect)
 
-        # Draw buttons
+        # Get mouse position
+        mx, my = pygame.mouse.get_pos()
+
+        # Draw buttons with hover effect
         for i, (text, _) in enumerate(buttons):
             rect = button_rects[i]
-            pygame.draw.rect(screen, button_color, rect, border_radius=10)
+            color = hover_color if rect.collidepoint(mx, my) else button_color
+            pygame.draw.rect(screen, color, rect, border_radius=10)
             rendered_text = button_font.render(text, True, text_color)
             text_rect = rendered_text.get_rect(center=rect.center)
             screen.blit(rendered_text, text_rect)

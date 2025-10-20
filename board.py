@@ -83,9 +83,9 @@ def get_valid_moves(board, player):
     return valid_moves
 
 
-def make_move(board, row, col, player):
-    opponent = get_opponent(player)
-    board[row][col] = player
+def make_move(board, row, col, current_player):
+    opponent = get_opponent(current_player)
+    board[row][col] = current_player
 
     for dr, dc in DIRECTIONS:
         flips = []
@@ -96,6 +96,6 @@ def make_move(board, row, col, player):
             r += dr
             c += dc
 
-        if is_on_board(r, c) and board[r][c] == player:
+        if is_on_board(r, c) and board[r][c] == current_player:
             for fr, fc in flips:
-                board[fr][fc] = player
+                board[fr][fc] = current_player
