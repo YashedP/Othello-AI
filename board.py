@@ -1,35 +1,50 @@
 import pygame
-import copy
 
 CELL_SIZE = 80
+BOARD_OFFSET_Y = 40  # leave space for top title bar
+BOTTOM_BAR_HEIGHT = 40
 DIRECTIONS = [
     (-1, 0), (1, 0), (0, -1), (0, 1),
     (-1, -1), (-1, 1), (1, -1), (1, 1)
 ]
 
 
-def draw_board(screen, board, valid_moves):
-    screen.fill((0, 100, 0))  # Green board color
+def draw_board(screen, board, valid_moves, current_player, time_remaining):
+    screen.fill((0, 100, 0))
 
-    # Draw grid
+    # --- Draw Top Bar ---
+    pygame.draw.rect(screen, (255, 255, 255), (0, 0, 640, BOARD_OFFSET_Y))
+    font = pygame.font.Font(None, 36)
+    title_text = font.render("Othello", True, (0, 0, 0))
+    screen.blit(title_text, (640 // 2 - title_text.get_width() // 2, 5))
+
+    # --- Draw Bottom Bar ---
+    pygame.draw.rect(screen, (255, 255, 255), (0, 680, 640, BOTTOM_BAR_HEIGHT))
+    info_font = pygame.font.Font(None, 28)
+    turn_text = info_font.render(f"Turn: {current_player.capitalize()}", True, (0, 0, 0))
+    time_text = info_font.render(f"Timer: {int(time_remaining)}s", True, (0, 0, 0))
+    screen.blit(turn_text, (10, 685))
+    screen.blit(time_text, (500, 685))
+
+    # --- Draw Grid ---
     for i in range(9):
-        pygame.draw.line(screen, (0, 0, 0), (0, i * CELL_SIZE), (640, i * CELL_SIZE))
-        pygame.draw.line(screen, (0, 0, 0), (i * CELL_SIZE, 0), (i * CELL_SIZE, 640))
+        pygame.draw.line(screen, (0, 0, 0), (0, BOARD_OFFSET_Y + i * CELL_SIZE), (640, BOARD_OFFSET_Y + i * CELL_SIZE))
+        pygame.draw.line(screen, (0, 0, 0), (i * CELL_SIZE, BOARD_OFFSET_Y), (i * CELL_SIZE, 680))
 
-    # Draw pieces
+    # --- Draw Pieces ---
     for r in range(8):
         for c in range(8):
             if board[r][c] == "black":
                 pygame.draw.circle(screen, (0, 0, 0),
-                                   (c * CELL_SIZE + CELL_SIZE // 2, r * CELL_SIZE + CELL_SIZE // 2), 30)
+                                   (c * CELL_SIZE + CELL_SIZE // 2, BOARD_OFFSET_Y + r * CELL_SIZE + CELL_SIZE // 2), 30)
             elif board[r][c] == "white":
                 pygame.draw.circle(screen, (255, 255, 255),
-                                   (c * CELL_SIZE + CELL_SIZE // 2, r * CELL_SIZE + CELL_SIZE // 2), 30)
+                                   (c * CELL_SIZE + CELL_SIZE // 2, BOARD_OFFSET_Y + r * CELL_SIZE + CELL_SIZE // 2), 30)
 
-    # Highlight valid moves
+    # --- Highlight Valid Moves ---
     for (r, c) in valid_moves:
-        pygame.draw.circle(screen, (200, 200, 200),  # Yellow highlight
-                           (c * CELL_SIZE + CELL_SIZE // 2, r * CELL_SIZE + CELL_SIZE // 2), 10)
+        pygame.draw.circle(screen, (200, 200, 200),
+                           (c * CELL_SIZE + CELL_SIZE // 2, BOARD_OFFSET_Y + r * CELL_SIZE + CELL_SIZE // 2), 10)
 
 
 def get_opponent(player):
