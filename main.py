@@ -8,23 +8,20 @@ pygame.init()
 # Window setup
 WIDTH, HEIGHT = 640, 720  # 80 extra px for top and bottom bars
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
-pygame.display.set_caption("Othello AI")
+pygame.display.set_caption("Othello Game")
 
 state = "MENU"
+player_color = "black"  # default
 clock = pygame.time.Clock()
 
 while True:
     if state == "MENU":
-        # Menu is still synchronous
-        state = show_menu(screen)
+        state, player_color = show_menu(screen)
 
     elif state == "GAME":
-        # Run the async game loop
-        state = asyncio.run(start_game(screen))
+        state = asyncio.run(start_game(screen, player_color))
 
     elif state == "QUIT":
         break
-
-    clock.tick(60)
 
 pygame.quit()

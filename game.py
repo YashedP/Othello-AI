@@ -27,14 +27,16 @@ async def run_ai(board, valid_moves, timeout=30):
         return valid_moves[0] if valid_moves else None
 
 
-async def start_game(screen):
+async def start_game(screen, player_color="black"):
     board = [[None for _ in range(BOARD_SIZE)] for _ in range(BOARD_SIZE)]
     board[3][3] = "white"
     board[3][4] = "black"
     board[4][3] = "black"
     board[4][4] = "white"
 
-    current_player = "black"
+    current_player = "black"  # always start black
+    ai_color = "white" if player_color == "black" else "black"
+
     previous_states = []
 
     font = pygame.font.Font(None, 30)
@@ -47,7 +49,14 @@ async def start_game(screen):
 
     # --- Button Positions ---
     back_rect = pygame.Rect(10, 5, 80, 30)
-    undo_rect = pygame.Rect(280, 685, 80, 30)  # Centered bottom
+    undo_rect = pygame.Rect(280, 685, 80, 30)  # Bottom center
+
+    # If player chose white, AI moves first
+    if player_color == "white":
+        ai_start_time = time.time()
+        ai_task = asyncio.create_task(
+            run_ai(copy.deepcopy(board), get_valid_moves(board, ai_color))
+        )
 
     while running:
         dt = clock.tick(60) / 1000.0
@@ -56,7 +65,7 @@ async def start_game(screen):
         valid_moves = get_valid_moves(board, current_player)
         time_remaining = 0
 
-        # --- EVENT HANDLING ---
+        # --- Event Handling ---
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 return "QUIT"
@@ -65,48 +74,47 @@ async def start_game(screen):
             elif event.type == pygame.MOUSEBUTTONDOWN:
                 x, y = event.pos
 
-                # Back button → return to menu
+                # Back button
                 if back_rect.collidepoint(x, y):
                     return "MENU"
 
-                # Undo button
+                # Undo button logic (same as before)
                 if undo_rect.collidepoint(x, y) and previous_states:
                     # Cancel AI task if it exists
                     if ai_task is not None and not ai_task.done():
                         ai_task.cancel()
                         try:
-                            await ai_task  # Await to ensure cancellation propagates
+                            await ai_task
                         except asyncio.CancelledError:
                             pass
                         ai_task = None
                         ai_start_time = None
 
-                    # Restore previous state
                     board, current_player = previous_states.pop()
 
-                    # If undo puts it back to AI's turn, start AI again
-                    if current_player == "white":
+                    # If undo restores AI's turn, trigger it
+                    if current_player == ai_color:
                         ai_start_time = time.time()
                         ai_task = asyncio.create_task(
-                            run_ai(copy.deepcopy(board), get_valid_moves(board, "white"))
+                            run_ai(copy.deepcopy(board), get_valid_moves(board, ai_color))
                         )
                     continue
 
-                # Player click
-                if current_player == "black" and ai_task is None and BOARD_OFFSET_Y <= y <= 680:
+                # Player move
+                if current_player == player_color and ai_task is None and BOARD_OFFSET_Y <= y <= 680:
                     row, col = (y - BOARD_OFFSET_Y) // CELL_SIZE, x // CELL_SIZE
                     if (row, col) in valid_moves:
                         previous_states.append((copy.deepcopy(board), current_player))
                         make_move(board, row, col, current_player)
-                        current_player = "white"
+                        current_player = ai_color
 
-                        # Start async AI move
+                        # Start AI move
                         ai_start_time = time.time()
                         ai_task = asyncio.create_task(
-                            run_ai(copy.deepcopy(board), get_valid_moves(board, "white"))
+                            run_ai(copy.deepcopy(board), get_valid_moves(board, ai_color))
                         )
 
-        # --- HANDLE AI MOVE ---
+        # --- Handle AI move ---
         if ai_task is not None:
             elapsed = time.time() - ai_start_time
             time_remaining = max(0, 30 - elapsed)
@@ -114,22 +122,20 @@ async def start_game(screen):
             if ai_task.done():
                 ai_move = ai_task.result()
                 if ai_move:
-                    previous_states.append((copy.deepcopy(board), "white"))
-                    make_move(board, ai_move[0], ai_move[1], "white")
-                current_player = "black"
+                    previous_states.append((copy.deepcopy(board), ai_color))
+                    make_move(board, ai_move[0], ai_move[1], ai_color)
+                current_player = player_color
                 ai_task = None
 
-        # --- DRAW BOARD & UI ---
+        # --- Draw Board & UI ---
         draw_board(screen, board, valid_moves, current_player, time_remaining)
 
-        # --- Buttons ---
-        # Back button (white)
+        # --- Draw buttons ---
         pygame.draw.rect(screen, (225, 225, 225), back_rect, border_radius=5)
         back_text = font.render("Back", True, (0, 0, 0))
         back_text_rect = back_text.get_rect(center=back_rect.center)
         screen.blit(back_text, back_text_rect)
 
-        # Undo button (green)
         pygame.draw.rect(screen, (0, 100, 0), undo_rect, border_radius=5)
         undo_text = font.render("Undo", True, (255, 255, 255))
         undo_text_rect = undo_text.get_rect(center=undo_rect.center)
