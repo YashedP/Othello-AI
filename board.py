@@ -47,6 +47,18 @@ def draw_board(screen, board, valid_moves, current_player, time_remaining):
                            (c * CELL_SIZE + CELL_SIZE // 2, BOARD_OFFSET_Y + r * CELL_SIZE + CELL_SIZE // 2), 10)
 
 
+def get_score(board):
+    black_score = 0
+    white_score = 0
+    for row in board:
+        for cell in row:
+            if cell == "black":
+                black_score += 1
+            elif cell == "white":
+                white_score += 1
+    return black_score, white_score
+
+
 def get_opponent(player):
     return "white" if player == "black" else "black"
 

@@ -2,7 +2,7 @@ import pygame
 import asyncio
 import copy
 import time
-from board import draw_board, get_valid_moves, make_move
+from board import draw_board, get_valid_moves, make_move, get_score
 
 BOARD_SIZE = 8
 CELL_SIZE = 80
@@ -39,13 +39,14 @@ async def start_game(screen, player_color="black"):
 
     previous_states = []
 
-    font = pygame.font.Font(None, 30)
     clock = pygame.time.Clock()
     running = True
 
     ai_task = None
     ai_start_time = None
-    ai_move = None
+
+    player_available_moves = []
+    ai_available_moves = []
 
     # --- Button Positions ---
     back_rect = pygame.Rect(10, 5, 80, 30)
@@ -63,6 +64,10 @@ async def start_game(screen, player_color="black"):
         screen.fill((0, 128, 0))
 
         valid_moves = get_valid_moves(board, current_player)
+        if current_player == player_color:
+            player_available_moves = copy.deepcopy(valid_moves)
+        else:
+            ai_available_moves = copy.deepcopy(valid_moves)
         time_remaining = 0
 
         # --- Event Handling ---
@@ -130,29 +135,111 @@ async def start_game(screen, player_color="black"):
         # --- Draw Board & UI ---
         draw_board(screen, board, valid_moves, current_player, time_remaining)
 
-        # Get mouse position
-        mx, my = pygame.mouse.get_pos()
+        draw_other_ui(screen, back_rect, undo_rect, board)
 
-        # --- Draw Buttons ---
-        # --- Draw Back button ---
-        back_color = (225, 225, 225)
-        back_hover_color = (200, 200, 200)
-        color = back_hover_color if back_rect.collidepoint(mx, my) else back_color
-        pygame.draw.rect(screen, color, back_rect, border_radius=5)
-        back_text = font.render("Back", True, (0, 0, 0))
-        back_text_rect = back_text.get_rect(center=back_rect.center)
-        screen.blit(back_text, back_text_rect)
-
-        # --- Draw Undo button ---
-        undo_color = (0, 100, 0)
-        undo_hover_color = (0, 140, 0)
-        color = undo_hover_color if undo_rect.collidepoint(mx, my) else undo_color
-        pygame.draw.rect(screen, color, undo_rect, border_radius=5)
-        undo_text = font.render("Undo", True, (255, 255, 255))
-        undo_text_rect = undo_text.get_rect(center=undo_rect.center)
-        screen.blit(undo_text, undo_text_rect)
+        result = await check_win_condition(player_available_moves, ai_available_moves, screen, board)
+        if result is not None:
+            return result
 
         pygame.display.flip()
         await asyncio.sleep(0)
 
     pygame.quit()
+
+
+async def check_win_condition(player_moves, ai_moves, screen, board):
+    if len(player_moves) == 0 and len(ai_moves) == 0:
+        # No valid moves for either player → Game Over
+        black_score, white_score = get_score(board)
+
+        # Determine winner
+        if black_score > white_score:
+            winner_text = "Black Wins!"
+        elif white_score > black_score:
+            winner_text = "White Wins!"
+        else:
+            winner_text = "It's a Tie!"
+
+        # Display result overlay
+        overlay = pygame.Surface((screen.get_width(), screen.get_height()), pygame.SRCALPHA)
+        overlay.fill((0, 0, 0, 180))  # translucent dark background
+        screen.blit(overlay, (0, 0))
+
+        result_font = pygame.font.Font(None, 80)
+        text = result_font.render(winner_text, True, (255, 255, 255))
+        text_rect = text.get_rect(center=(screen.get_width() // 2, screen.get_height() // 2))
+        screen.blit(text, text_rect)
+
+        sub_font = pygame.font.Font(None, 40)
+        sub_text = sub_font.render("Click anywhere to return to menu", True, (200, 200, 200))
+        sub_text_rect = sub_text.get_rect(center=(screen.get_width() // 2, screen.get_height() // 2 + 60))
+        screen.blit(sub_text, sub_text_rect)
+        pygame.display.flip()
+
+        # --- Wait for user input ---
+        waiting = True
+        while waiting:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    return "QUIT"
+                elif event.type in (pygame.MOUSEBUTTONDOWN, pygame.KEYDOWN):
+                    return "MENU"
+            await asyncio.sleep(0)
+
+    return None
+
+
+def draw_other_ui(screen, back_rect, undo_rect, board):
+    font = pygame.font.Font(None, 30)
+
+    # Get mouse position
+    mx, my = pygame.mouse.get_pos()
+
+    # --- Draw Buttons ---
+    # --- Draw Back button ---
+    back_color = (225, 225, 225)
+    back_hover_color = (200, 200, 200)
+    color = back_hover_color if back_rect.collidepoint(mx, my) else back_color
+    pygame.draw.rect(screen, color, back_rect, border_radius=5)
+    back_text = font.render("Back", True, (0, 0, 0))
+    back_text_rect = back_text.get_rect(center=back_rect.center)
+    screen.blit(back_text, back_text_rect)
+
+    # --- Draw Undo button ---
+    undo_color = (0, 100, 0)
+    undo_hover_color = (0, 140, 0)
+    color = undo_hover_color if undo_rect.collidepoint(mx, my) else undo_color
+    pygame.draw.rect(screen, color, undo_rect, border_radius=5)
+    undo_text = font.render("Undo", True, (255, 255, 255))
+    undo_text_rect = undo_text.get_rect(center=undo_rect.center)
+    screen.blit(undo_text, undo_text_rect)
+
+    # --- Draw Score Box in Top-Right ---
+    score_box_width, score_box_height = 120, 30
+    score_box_rect = pygame.Rect(screen.get_width() - score_box_width - 10, 5, score_box_width, score_box_height)
+    pygame.draw.rect(screen, (180, 180, 180), score_box_rect, border_radius=5)
+
+    # Get current scores
+    black_score, white_score = get_score(board)
+
+    # Split the box into two halves
+    half_width = score_box_width // 2
+
+    # Draw vertical separator line
+    separator_x = score_box_rect.x + half_width
+    pygame.draw.line(screen, (0, 0, 0), (separator_x, score_box_rect.y + 5),
+                     (separator_x, score_box_rect.y + score_box_height - 5), 2)
+
+    # Render scores
+    black_text = font.render(str(black_score), True, (0, 0, 0))
+    white_text = font.render(str(white_score), True, (255, 255, 255))
+
+    # Center each score in its own half
+    black_text_rect = black_text.get_rect(center=(score_box_rect.x + half_width // 2,
+                                                  score_box_rect.y + score_box_height // 2))
+    white_text_rect = white_text.get_rect(center=(score_box_rect.x + half_width + half_width // 2,
+                                                  score_box_rect.y + score_box_height // 2))
+
+    # Blit scores
+    screen.blit(black_text, black_text_rect)
+    screen.blit(white_text, white_text_rect)
