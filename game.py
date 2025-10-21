@@ -2,7 +2,7 @@ import pygame
 import asyncio
 import copy
 import time
-from board import draw_board, get_valid_moves, make_move, get_score
+from board import draw_board, get_valid_moves, make_move, get_score, display_board_in_console
 from minimax_ai import start_minimax_async
 
 BOARD_SIZE = 8
@@ -22,12 +22,33 @@ async def run_ai(board, ai_color, player_color):
     return await minimax_ai_move(board, ai_color, player_color)
 
 
+def next_turn_with_skip(board, current_player, player_color, ai_color):
+    """Switch turns, skipping if the next player has no valid moves."""
+    next_player = ai_color if current_player == player_color else player_color
+
+    player_moves = get_valid_moves(board, player_color)
+    ai_moves = get_valid_moves(board, ai_color)
+
+    # Check for game over
+    if len(player_moves) == 0 and len(ai_moves) == 0:
+        return None  # means game over
+
+    # If next player has no moves, skip their turn
+    if len(get_valid_moves(board, next_player)) == 0:
+        print(f"{next_player} has no moves. Skipping turn...")
+        next_player = current_player  # stay same player for another move
+
+    return next_player
+
+
 async def start_game(screen, player_color="black"):
     board = [[None for _ in range(BOARD_SIZE)] for _ in range(BOARD_SIZE)]
     board[3][3] = "white"
     board[3][4] = "black"
     board[4][3] = "black"
     board[4][4] = "white"
+
+    display_board_in_console(board)
 
     current_player = "black"  # always start black
     ai_color = "white" if player_color == "black" else "black"
@@ -97,20 +118,20 @@ async def start_game(screen, player_color="black"):
                     if (row, col) in valid_moves:
                         previous_states.append((copy.deepcopy(board), current_player))
                         make_move(board, row, col, current_player)
+                        display_board_in_console(board)
 
-                        if check_win_condition(player_color, ai_color, board):
+                        next_player = next_turn_with_skip(board, current_player, player_color, ai_color)
+                        if next_player is None:
                             # --- Draw Board & UI ---
                             draw_board(screen, board, valid_moves, current_player, time_remaining)
                             draw_other_ui(screen, back_rect, undo_rect, board)
                             return await show_win_screen(screen, board)
 
-                        current_player = ai_color
+                        current_player = next_player
 
-                        # Start AI move
-                        ai_start_time = time.time()
-                        ai_task = asyncio.create_task(
-                            run_ai(copy.deepcopy(board), ai_color, player_color)
-                        )
+                        if current_player == ai_color:
+                            ai_start_time = time.time()
+                            ai_task = asyncio.create_task(run_ai(copy.deepcopy(board), ai_color, player_color))
 
         # --- Handle AI move ---
         if ai_task is not None:
@@ -122,14 +143,21 @@ async def start_game(screen, player_color="black"):
                 if ai_move:
                     previous_states.append((copy.deepcopy(board), ai_color))
                     make_move(board, ai_move[0], ai_move[1], ai_color)
+                    display_board_in_console(board)
 
-                    if check_win_condition(player_color, ai_color, board):
+                    next_player = next_turn_with_skip(board, current_player, player_color, ai_color)
+                    if next_player is None:
                         # --- Draw Board & UI ---
                         draw_board(screen, board, valid_moves, current_player, time_remaining)
                         draw_other_ui(screen, back_rect, undo_rect, board)
                         return await show_win_screen(screen, board)
 
-                current_player = player_color
+                    current_player = next_player
+
+                    if current_player == ai_color:
+                        ai_start_time = time.time()
+                        ai_task = asyncio.create_task(run_ai(copy.deepcopy(board), ai_color, player_color))
+
                 ai_task = None
 
         # --- Draw Board & UI ---
@@ -139,6 +167,12 @@ async def start_game(screen, player_color="black"):
 
         if check_win_condition(player_color, ai_color, board):
             return await show_win_screen(screen, board)
+
+        # --- If AI's turn and no task is running, start AI automatically ---
+        if ai_task is None and current_player == ai_color:
+            print("AI turn resumed after skip or undo. Starting AI task...")
+            ai_start_time = time.time()
+            ai_task = asyncio.create_task(run_ai(copy.deepcopy(board), ai_color, player_color))
 
         pygame.display.flip()
         await asyncio.sleep(0)

@@ -111,3 +111,16 @@ def make_move(board, row, col, current_player):
         if is_on_board(r, c) and board[r][c] == current_player:
             for fr, fc in flips:
                 board[fr][fc] = current_player
+
+
+def display_board_in_console(board):
+    print("—" * 17)
+    for row in board:
+        print("|", end="")
+        for col in row:
+            if col is not None:
+                print(col[0], end="|")
+            else:
+                print(" ", end="|")
+        print()
+    print("—" * 17)

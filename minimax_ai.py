@@ -4,7 +4,7 @@ import asyncio
 import time
 from board import make_move, get_valid_moves, get_score
 
-MAX_DEPTH = 5  # Technically 4 ply since it stops at 0
+MAX_DEPTH = 4  # Technically 5 ply since it stops at 0
 
 
 async def start_minimax_async(board, player_color, ai_color, time_limit=30):
@@ -19,7 +19,7 @@ node_counter = 0  # global or passed in context
 async def minimax_async(board, depth, maximizing_player, player_color, ai_color, start_time, time_limit=30, alpha=-math.inf, beta=math.inf):
     global node_counter
     node_counter += 1
-    if node_counter % 250 == 0:  # yield every 250 nodes
+    if node_counter % 500 == 0:  # yield every 500 nodes
         await asyncio.sleep(0)
 
     if time.time() - start_time > time_limit:
@@ -84,8 +84,8 @@ NEAR_CORNERS = [(0,1),(1,0),(1,1),(0,6),(1,6),(1,7),
 
 def evaluate_board(board, ai_color, player_color):
     """
-    Returns a numeric score for `player_color` from the board state.
-    Positive = favorable to player, Negative = favorable to opponent.
+    Returns a numeric score for `ai_color` from the board state.
+    Positive = favorable to ai, Negative = favorable to player.
     """
 
     # --- Piece difference ---
