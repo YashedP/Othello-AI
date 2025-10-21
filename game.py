@@ -60,7 +60,6 @@ async def start_game(screen, player_color="black"):
         )
 
     while running:
-        dt = clock.tick(60) / 1000.0
         screen.fill((0, 128, 0))
 
         valid_moves = get_valid_moves(board, current_player)
