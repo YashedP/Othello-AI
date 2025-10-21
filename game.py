@@ -3,28 +3,23 @@ import asyncio
 import copy
 import time
 from board import draw_board, get_valid_moves, make_move, get_score
+from minimax_ai import start_minimax_async
 
 BOARD_SIZE = 8
 CELL_SIZE = 80
 BOARD_OFFSET_Y = 40
 
 
-async def dummy_ai_move(board, valid_moves):
-    """Simulate AI thinking asynchronously."""
-    await asyncio.sleep(2)
-    if valid_moves:
-        return valid_moves[0]
-    return None
+async def minimax_ai_move(board, ai_color, player_color):
+    """Asynchronous wrapper for minimax AI."""
+    await asyncio.sleep(0)  # yield to event loop for smooth updates
+    _, best_move = await start_minimax_async(board, player_color, ai_color)
+    return best_move
 
 
-async def run_ai(board, valid_moves, timeout=30):
+async def run_ai(board, ai_color, player_color):
     """Run the AI with a time limit (async-safe)."""
-    try:
-        move = await asyncio.wait_for(dummy_ai_move(board, valid_moves), timeout)
-        return move
-    except asyncio.TimeoutError:
-        print("AI took too long! Choosing fallback move.")
-        return valid_moves[0] if valid_moves else None
+    return await minimax_ai_move(board, ai_color, player_color)
 
 
 async def start_game(screen, player_color="black"):
@@ -39,14 +34,10 @@ async def start_game(screen, player_color="black"):
 
     previous_states = []
 
-    clock = pygame.time.Clock()
     running = True
 
     ai_task = None
     ai_start_time = None
-
-    player_available_moves = []
-    ai_available_moves = []
 
     # --- Button Positions ---
     back_rect = pygame.Rect(10, 5, 80, 30)
@@ -56,17 +47,13 @@ async def start_game(screen, player_color="black"):
     if player_color == "white":
         ai_start_time = time.time()
         ai_task = asyncio.create_task(
-            run_ai(copy.deepcopy(board), get_valid_moves(board, ai_color))
+            run_ai(copy.deepcopy(board), ai_color, player_color)
         )
 
     while running:
         screen.fill((0, 128, 0))
 
         valid_moves = get_valid_moves(board, current_player)
-        if current_player == player_color:
-            player_available_moves = copy.deepcopy(valid_moves)
-        else:
-            ai_available_moves = copy.deepcopy(valid_moves)
         time_remaining = 0
 
         # --- Event Handling ---
@@ -100,7 +87,7 @@ async def start_game(screen, player_color="black"):
                     if current_player == ai_color:
                         ai_start_time = time.time()
                         ai_task = asyncio.create_task(
-                            run_ai(copy.deepcopy(board), get_valid_moves(board, ai_color))
+                            run_ai(copy.deepcopy(board), ai_color, player_color)
                         )
                     continue
 
@@ -110,12 +97,19 @@ async def start_game(screen, player_color="black"):
                     if (row, col) in valid_moves:
                         previous_states.append((copy.deepcopy(board), current_player))
                         make_move(board, row, col, current_player)
+
+                        if check_win_condition(player_color, ai_color, board):
+                            # --- Draw Board & UI ---
+                            draw_board(screen, board, valid_moves, current_player, time_remaining)
+                            draw_other_ui(screen, back_rect, undo_rect, board)
+                            return await show_win_screen(screen, board)
+
                         current_player = ai_color
 
                         # Start AI move
                         ai_start_time = time.time()
                         ai_task = asyncio.create_task(
-                            run_ai(copy.deepcopy(board), get_valid_moves(board, ai_color))
+                            run_ai(copy.deepcopy(board), ai_color, player_color)
                         )
 
         # --- Handle AI move ---
@@ -128,6 +122,13 @@ async def start_game(screen, player_color="black"):
                 if ai_move:
                     previous_states.append((copy.deepcopy(board), ai_color))
                     make_move(board, ai_move[0], ai_move[1], ai_color)
+
+                    if check_win_condition(player_color, ai_color, board):
+                        # --- Draw Board & UI ---
+                        draw_board(screen, board, valid_moves, current_player, time_remaining)
+                        draw_other_ui(screen, back_rect, undo_rect, board)
+                        return await show_win_screen(screen, board)
+
                 current_player = player_color
                 ai_task = None
 
@@ -136,9 +137,8 @@ async def start_game(screen, player_color="black"):
 
         draw_other_ui(screen, back_rect, undo_rect, board)
 
-        result = await check_win_condition(player_available_moves, ai_available_moves, screen, board)
-        if result is not None:
-            return result
+        if check_win_condition(player_color, ai_color, board):
+            return await show_win_screen(screen, board)
 
         pygame.display.flip()
         await asyncio.sleep(0)
@@ -146,46 +146,54 @@ async def start_game(screen, player_color="black"):
     pygame.quit()
 
 
-async def check_win_condition(player_moves, ai_moves, screen, board):
+def check_win_condition(player_color, ai_color, board):
+    # Recalculate moves for both players based on the current board
+    player_moves = get_valid_moves(board, player_color)
+    ai_moves = get_valid_moves(board, ai_color)
+
+    # If no valid moves for either player → game over
     if len(player_moves) == 0 and len(ai_moves) == 0:
-        # No valid moves for either player → Game Over
-        black_score, white_score = get_score(board)
+        return True
 
-        # Determine winner
-        if black_score > white_score:
-            winner_text = "Black Wins!"
-        elif white_score > black_score:
-            winner_text = "White Wins!"
-        else:
-            winner_text = "It's a Tie!"
+    return False
 
-        # Display result overlay
-        overlay = pygame.Surface((screen.get_width(), screen.get_height()), pygame.SRCALPHA)
-        overlay.fill((0, 0, 0, 180))  # translucent dark background
-        screen.blit(overlay, (0, 0))
 
-        result_font = pygame.font.Font(None, 80)
-        text = result_font.render(winner_text, True, (255, 255, 255))
-        text_rect = text.get_rect(center=(screen.get_width() // 2, screen.get_height() // 2))
-        screen.blit(text, text_rect)
+async def show_win_screen(screen, board):
+    black_score, white_score = get_score(board)
 
-        sub_font = pygame.font.Font(None, 40)
-        sub_text = sub_font.render("Click anywhere to return to menu", True, (200, 200, 200))
-        sub_text_rect = sub_text.get_rect(center=(screen.get_width() // 2, screen.get_height() // 2 + 60))
-        screen.blit(sub_text, sub_text_rect)
-        pygame.display.flip()
+    # Determine winner
+    if black_score > white_score:
+        winner_text = "Black Wins!"
+    elif white_score > black_score:
+        winner_text = "White Wins!"
+    else:
+        winner_text = "It's a Tie!"
 
-        # --- Wait for user input ---
-        waiting = True
-        while waiting:
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    return "QUIT"
-                elif event.type in (pygame.MOUSEBUTTONDOWN, pygame.KEYDOWN):
-                    return "MENU"
-            await asyncio.sleep(0)
+    # Display result overlay
+    overlay = pygame.Surface((screen.get_width(), screen.get_height()), pygame.SRCALPHA)
+    overlay.fill((0, 0, 0, 180))  # translucent dark background
+    screen.blit(overlay, (0, 0))
 
-    return None
+    result_font = pygame.font.Font(None, 80)
+    text = result_font.render(winner_text, True, (255, 255, 255))
+    text_rect = text.get_rect(center=(screen.get_width() // 2, screen.get_height() // 2))
+    screen.blit(text, text_rect)
+
+    sub_font = pygame.font.Font(None, 40)
+    sub_text = sub_font.render("Click anywhere to return to menu", True, (200, 200, 200))
+    sub_text_rect = sub_text.get_rect(center=(screen.get_width() // 2, screen.get_height() // 2 + 60))
+    screen.blit(sub_text, sub_text_rect)
+    pygame.display.flip()
+
+    # --- Wait for user input ---
+    waiting = True
+    while waiting:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                return "QUIT"
+            elif event.type in (pygame.MOUSEBUTTONDOWN, pygame.KEYDOWN):
+                return "MENU"
+        await asyncio.sleep(0)
 
 
 def draw_other_ui(screen, back_rect, undo_rect, board):
