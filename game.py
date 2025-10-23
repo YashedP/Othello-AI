@@ -118,6 +118,7 @@ async def start_game(screen, player_color="black"):
                     if (row, col) in valid_moves:
                         previous_states.append((copy.deepcopy(board), current_player))
                         make_move(board, row, col, current_player)
+                        print(f"{current_player} plays at row {7 - row}, col {col}")
                         display_board_in_console(board)
 
                         next_player = next_turn_with_skip(board, current_player, player_color, ai_color)
@@ -143,6 +144,7 @@ async def start_game(screen, player_color="black"):
                 if ai_move:
                     previous_states.append((copy.deepcopy(board), ai_color))
                     make_move(board, ai_move[0], ai_move[1], ai_color)
+                    print(f"{current_player} plays at row {7 - ai_move[0]}, col {ai_move[1]}")
                     display_board_in_console(board)
 
                     next_player = next_turn_with_skip(board, current_player, player_color, ai_color)
@@ -154,11 +156,11 @@ async def start_game(screen, player_color="black"):
 
                     current_player = next_player
 
-                    if current_player == ai_color:
-                        ai_start_time = time.time()
-                        ai_task = asyncio.create_task(run_ai(copy.deepcopy(board), ai_color, player_color))
-
-                ai_task = None
+                if current_player == ai_color:
+                    ai_start_time = time.time()
+                    ai_task = asyncio.create_task(run_ai(copy.deepcopy(board), ai_color, player_color))
+                else:
+                    ai_task = None
 
         # --- Draw Board & UI ---
         draw_board(screen, board, valid_moves, current_player, time_remaining)
@@ -202,6 +204,8 @@ async def show_win_screen(screen, board):
         winner_text = "White Wins!"
     else:
         winner_text = "It's a Tie!"
+
+    print(winner_text)
 
     # Display result overlay
     overlay = pygame.Surface((screen.get_width(), screen.get_height()), pygame.SRCALPHA)
