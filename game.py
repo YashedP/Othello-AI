@@ -11,19 +11,16 @@ BOARD_OFFSET_Y = 40
 
 
 async def minimax_ai_move(board, ai_color, player_color):
-    """Asynchronous wrapper for minimax AI."""
     await asyncio.sleep(0)  # yield to event loop for smooth updates
     _, best_move = await start_minimax_async(board, player_color, ai_color)
     return best_move
 
 
 async def run_ai(board, ai_color, player_color):
-    """Run the AI with a time limit (async-safe)."""
     return await minimax_ai_move(board, ai_color, player_color)
 
 
 def next_turn_with_skip(board, current_player, player_color, ai_color):
-    """Switch turns, skipping if the next player has no valid moves."""
     next_player = ai_color if current_player == player_color else player_color
 
     player_moves = get_valid_moves(board, player_color)
@@ -103,6 +100,12 @@ async def start_game(screen, player_color="black"):
                         ai_start_time = None
 
                     board, current_player = previous_states.pop()
+
+                    print("Undoing up until player's last move...")
+                    # Keep undoing until it's the player's turn (or history runs out)
+                    while current_player != player_color and previous_states:
+                        board, current_player = previous_states.pop()
+                    display_board_in_console(board)
 
                     # If undo restores AI's turn, trigger it
                     if current_player == ai_color:

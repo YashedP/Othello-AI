@@ -1,3 +1,10 @@
+"""
+Othello AI Project
+Authors: Daniel Acosta, Yash Jani
+Intro Artificial Intelligence
+Date of Submission: 11/10/2025
+"""
+
 import pygame
 import asyncio
 from menu import show_menu

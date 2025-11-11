@@ -19,12 +19,13 @@ node_counter = 0  # global or passed in context
 async def minimax_async(board, depth, maximizing_player, player_color, ai_color, start_time, time_limit=30, alpha=-math.inf, beta=math.inf):
     global node_counter
     node_counter += 1
-    if node_counter % 500 == 0:  # yield every 500 nodes
+    if node_counter % 1000 == 0:  # yield every 500 nodes
         await asyncio.sleep(0)
 
     if time.time() - start_time > time_limit:
         return 0, None, True  # timed out
 
+    # Recursive base case
     valid_moves = get_valid_moves(board, ai_color if maximizing_player else player_color)
     if depth == 0 or not valid_moves:
         return evaluate_board(board, ai_color, player_color), None, False
@@ -32,21 +33,23 @@ async def minimax_async(board, depth, maximizing_player, player_color, ai_color,
     best_move = None
     timed_out = False
 
+    # --- Alpha-Beta pruning ---
     if maximizing_player:
         max_eval = -math.inf
         for move in valid_moves:
             new_board = copy.deepcopy(board)
             make_move(new_board, move[0], move[1], ai_color)
             eval_score, _, child_timed_out = await minimax_async(new_board, depth-1, False, player_color, ai_color, start_time, time_limit, alpha, beta)
-            if child_timed_out:
-                timed_out = True
-                break
             if eval_score > max_eval:
                 max_eval = eval_score
                 best_move = move
             alpha = max(alpha, eval_score)
             if beta <= alpha:
                 break
+            if child_timed_out:
+                timed_out = True
+                break
+
         return max_eval, best_move, timed_out
     else:
         min_eval = math.inf
@@ -68,25 +71,34 @@ async def minimax_async(board, depth, maximizing_player, player_color, ai_color,
         return min_eval, best_move, timed_out
 
 
-# Coefficients
-PIECE_DIFFERENCE_WEIGHT = 10            # Piece difference weight
-MOBILITY_WEIGHT = 5                     # Mobility weight
-CORNER_CONTROL_WEIGHT = 25              # Corner control weight
-EDGE_CONTROL_WEIGHT = 5                 # Edge control weight
-NEARBY_CORNERS_PENALTY_WEIGHT = 20      # Penalty for pieces near corners
-
 # Corner positions
 CORNERS = [(0, 0), (0, 7), (7, 0), (7, 7)]
 # Positions directly adjacent to corners
-NEAR_CORNERS = [(0,1),(1,0),(1,1),(0,6),(1,6),(1,7),
-                (6,0),(6,1),(7,1),(6,6),(6,7),(7,6)]
+NEARBY_OFFSETS = [(0,1),(1,0),(1,1), (0,-1),(-1,0),(-1,-1), (1,-1),(-1,1)]
 
 
 def evaluate_board(board, ai_color, player_color):
-    """
-    Returns a numeric score for `ai_color` from the board state.
-    Positive = favorable to ai, Negative = favorable to player.
-    """
+
+    num_discs = sum(1 for row in board for cell in row if cell is not None)
+    phase = num_discs / 64.0  # 0 = start, 1 = end
+
+    # Coefficients
+    PIECE_DIFFERENCE_WEIGHT = 0             # Piece difference weight
+    MOBILITY_WEIGHT = 0                     # Mobility weight
+    CORNER_CONTROL_WEIGHT = 0               # Corner control weight
+    EDGE_CONTROL_WEIGHT = 0                 # Edge control weight
+    NEARBY_CORNERS_PENALTY_WEIGHT = 0       # Penalty for pieces near corners
+
+    # --- Game phase detection ---
+    if phase < 0.4:
+        # Opening: prioritize mobility and corner potential
+        PIECE_DIFFERENCE_WEIGHT, MOBILITY_WEIGHT, CORNER_CONTROL_WEIGHT, EDGE_CONTROL_WEIGHT, NEARBY_CORNERS_PENALTY_WEIGHT = 5, 30, 60, 10, 10
+    elif phase < 0.8:
+        # Mid-game: balance mobility and edge control
+        PIECE_DIFFERENCE_WEIGHT, MOBILITY_WEIGHT, CORNER_CONTROL_WEIGHT, EDGE_CONTROL_WEIGHT, NEARBY_CORNERS_PENALTY_WEIGHT = 10, 15, 80, 20, 5
+    else:
+        # Endgame: raw piece advantage and corner control matters
+        PIECE_DIFFERENCE_WEIGHT, MOBILITY_WEIGHT, CORNER_CONTROL_WEIGHT, EDGE_CONTROL_WEIGHT, NEARBY_CORNERS_PENALTY_WEIGHT = 40, 5, 100, 20, 2
 
     # --- Piece difference ---
     black_score, white_score = get_score(board)
@@ -134,9 +146,21 @@ def evaluate_board(board, ai_color, player_color):
     edge_control = ai_edges - player_edges
 
     # --- Nearby corners penalty ---
-    player_near = sum(1 for r, c in NEAR_CORNERS if board[r][c] == ai_color)
-    opp_near = sum(1 for r, c in NEAR_CORNERS if board[r][c] == player_color)
-    nearby_corners = player_near - opp_near
+    ai_near = 0
+    player_near = 0
+    for (cRow, cCol) in CORNERS:
+        corner_owner = board[cRow][cCol]
+        for dRow, dCol in NEARBY_OFFSETS:
+            nRow, nCol = cRow + dRow, cCol + dCol
+            if 0 <= nRow < 8 and 0 <= nCol < 8:
+                cell = board[nRow][nCol]
+                # Only penalize nearby squares if the corner is NOT owned by that player
+                if cell == ai_color and corner_owner != ai_color:
+                    ai_near += 1
+                elif cell == player_color and corner_owner != player_color:
+                    player_near += 1
+
+    nearby_corners = ai_near - player_near
 
     # --- Final evaluation ---
     score = (PIECE_DIFFERENCE_WEIGHT * piece_diff +

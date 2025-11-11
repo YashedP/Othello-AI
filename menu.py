@@ -57,6 +57,7 @@ def show_menu(screen):
             text_rect = rendered_text.get_rect(center=rect.center)
             screen.blit(rendered_text, text_rect)
 
+        # Render screen updates
         pygame.display.flip()
 
         # Event handling
